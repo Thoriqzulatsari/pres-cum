@@ -1,8 +1,8 @@
 <?php
 // Database configuration
 define('DB_SERVER', 'localhost');
-define('DB_USERNAME', 'u287442801_presdorm');
-define('DB_PASSWORD', 'Adminpresdrom123_');
+define('DB_USERNAME', 'root');
+define('DB_PASSWORD', '');
 define('DB_NAME', 'u287442801_presdorm');
 
 // Attempt to connect to MySQL database
