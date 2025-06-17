@@ -1,9 +1,8 @@
 <?php
 require_once 'config.php';
-
-// Get current year for copyright
 $current_year = date('Y');
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
