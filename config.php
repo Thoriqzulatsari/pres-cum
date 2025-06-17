@@ -1,9 +1,9 @@
 <?php
 // Database configuration
 define('DB_SERVER', 'localhost');
-define('DB_USERNAME', 'root');
-define('DB_PASSWORD', '');
-define('DB_NAME', 'presdorm');
+define('DB_USERNAME', 'u287442801_presdorm');
+define('DB_PASSWORD', 'Adminpresdrom123_');
+define('DB_NAME', 'u287442801_presdorm');
 
 // Attempt to connect to MySQL database
 $conn = new mysqli(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME);
