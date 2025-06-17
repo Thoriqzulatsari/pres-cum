@@ -1,0 +1,819 @@
+<?php
+require_once 'config.php';
+
+// Redirect to dashboard if already logged in
+if (isLoggedIn()) {
+    if (isAdmin()) {
+        redirect('admin/dashboard.php');
+    } else {
+        redirect('resident/dashboard.php');
+    }
+}
+
+// Get current year for copyright
+$current_year = date('Y');
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PresDorm - Dormitory Management System</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="icon" type="image/png" href="images/President_University_Logo.png">
+    <style>
+        :root {
+            --primary-color: #4a6cf7;
+            --secondary-color: #5e7bf9;
+            --dark-color: #232946;
+            --light-color: #f8f9fa;
+            --accent-color: #eebbc3;
+            --text-color: #232946;
+            --text-light: #b8c1ec;
+            --box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: var(--text-color);
+            background-color: #f9fafc;
+            overflow-x: hidden;
+        }
+
+        /* Navigation */
+        .navbar {
+            padding: 1rem 2rem;
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary-color) !important;
+        }
+
+        .navbar-toggler {
+            border: none;
+            outline: none;
+        }
+
+        .navbar-toggler:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .nav-link {
+            font-weight: 500;
+            margin: 0 10px;
+            color: var(--dark-color) !important;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color) !important;
+            transform: translateY(-2px);
+        }
+
+        .nav-btn {
+            padding: 0.5rem 1.5rem;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            color: white !important;
+            border-radius: 30px;
+            box-shadow: 0 4px 12px rgba(74, 108, 247, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(74, 108, 247, 0.5);
+        }
+
+        /* Hero Section */
+
+    .hero-section {
+        background: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.65)), url('images/push.jpeg');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        color: white;
+        padding: 160px 0 120px;
+        margin-bottom: 0;
+        position: relative;
+        overflow: hidden;
+}
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .hero-subtitle {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .hero-btn {
+            padding: 0.8rem 2.5rem;
+            margin: 0 10px 10px 0;
+            border-radius: 30px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(45deg, var(--secondary-color), var(--primary-color));
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(74, 108, 247, 0.5);
+        }
+
+        .btn-outline-light:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(255,255,255,0.15);
+        }
+
+        /* Features Section */
+        .features-section {
+            padding: 120px 0;
+            background-color: white;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            position: relative;
+            display: inline-block;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            width: 60%;
+            height: 5px;
+            bottom: -15px;
+            left: 0;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            border-radius: 5px;
+        }
+
+        .section-subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 3rem;
+            color: #666;
+        }
+
+        .feature-card {
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: var(--box-shadow);
+            transition: all 0.3s ease;
+            height: 100%;
+            background-color: white;
+            border: none;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .feature-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .feature-text {
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Dormitories Section */
+        .dormitories-section {
+            padding: 120px 0;
+            background-color: #f9fafc;
+        }
+
+        .dorm-card {
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: var(--box-shadow);
+            transition: all 0.3s ease;
+            background-color: white;
+            border: none;
+            height: 100%;
+        }
+
+        .dorm-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        }
+
+        .dorm-img {
+            height: 200px;
+            object-fit: cover;
+        }
+
+        .dorm-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 5px 15px;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 30px;
+            font-weight: 500;
+            font-size: 0.8rem;
+        }
+
+        .dorm-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .dorm-text {
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+
+        .dorm-feature {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .dorm-feature i {
+            color: var(--primary-color);
+            margin-right: 5px;
+        }
+
+        /* Testimonials Section */
+        .testimonials-section {
+            padding: 120px 0;
+            background-color: white;
+        }
+
+        .testimonial-card {
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: var(--box-shadow);
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .testimonial-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        }
+
+        .testimonial-img {
+            width: 70px;
+            height: 70px;
+            object-fit: cover;
+            border-radius: 50%;
+            margin-bottom: 1rem;
+        }
+
+        .testimonial-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.2rem;
+        }
+
+        .testimonial-position {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        .testimonial-text {
+            color: #666;
+            font-style: italic;
+        }
+
+        .testimonial-rating {
+            color: #ffc107;
+            margin-bottom: 1rem;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 80px 0;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            color: white;
+        }
+
+        .cta-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .cta-text {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .cta-btn {
+            padding: 0.8rem 2.5rem;
+            border-radius: 30px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            background-color: white;
+            color: var(--primary-color);
+        }
+
+        .cta-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(255,255,255,0.2);
+            background-color: var(--accent-color);
+            color: var(--dark-color);
+        }
+
+        /* Footer */
+        .footer {
+            padding: 80px 0 30px;
+            background-color: var(--dark-color);
+            color: white;
+        }
+
+        .footer-logo {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: white;
+        }
+
+        .footer-text {
+            color: var(--text-light);
+            margin-bottom: 1.5rem;
+        }
+
+        .footer-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: white;
+        }
+
+        .footer-link {
+            display: block;
+            color: var(--text-light);
+            margin-bottom: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .footer-link:hover {
+            color: white;
+            transform: translateX(5px);
+            text-decoration: none;
+        }
+
+        .footer-social {
+            margin-top: 1.5rem;
+        }
+
+        .footer-social a {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            background-color: rgba(255,255,255,0.1);
+            color: white;
+            border-radius: 50%;
+            margin-right: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .footer-social a:hover {
+            background-color: var(--primary-color);
+            transform: translateY(-3px);
+        }
+
+        .footer-bottom {
+            padding-top: 30px;
+            margin-top: 30px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+            color: var(--text-light);
+        }
+
+        /* Responsive Styles */
+        @media (max-width: 992px) {
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            .hero-subtitle {
+                font-size: 1.2rem;
+            }
+            .section-title {
+                font-size: 2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero-section {
+                padding: 120px 0 80px;
+            }
+            .hero-title {
+                font-size: 2rem;
+            }
+            .hero-subtitle {
+                font-size: 1rem;
+            }
+            .features-section, .dormitories-section, .testimonials-section {
+                padding: 80px 0;
+            }
+            .section-title {
+                font-size: 1.8rem;
+            }
+            .section-subtitle {
+                font-size: 1rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .hero-section {
+                padding: 100px 0 60px;
+            }
+            .hero-title {
+                font-size: 1.8rem;
+            }
+            .hero-btn {
+                display: block;
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+<!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+            <div class="container">
+                <a class="navbar-brand d-flex align-items-center" href="index.php">
+                    <img src="https://upload.wikimedia.org/wikipedia/en/a/ae/President_University_Logo.png" alt="PresDorm Logo" height="60" class="mr-2">
+                    <span>PresDorm</span>
+                </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" href="#features">Features</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#dormitories">Dormitories</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#testimonials">Reviews</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="login.php">Login</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link nav-btn" href="register.php">Register</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 hero-content">
+                    <h1 class="hero-title">Experience Modern Dormitory Living</h1>
+                    <p class="hero-subtitle">A comprehensive dormitory management system that streamlines your campus living experience.</p>
+                    <div>
+                        <a href="register.php" class="btn btn-primary hero-btn">Register Now</a>
+                        <a href="login.php" class="btn btn-outline-light hero-btn">Login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section" id="features">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title">Why Choose PresDorm?</h2>
+                <p class="section-subtitle">Discover the features that make our dormitory management system stand out.</p>
+            </div>
+            <div class="row">
+                <!-- Removed "Secure Access" and "Easy Payments" feature cards -->
+                <div class="col-md-6 mb-4">
+                    <div class="feature-card">
+                        <i class="fas fa-tools feature-icon"></i>
+                        <h3 class="feature-title">Maintenance Requests</h3>
+                        <p class="feature-text">Submit and track maintenance requests directly through the resident portal.</p>
+                        <a href="register.php" class="btn btn-primary">Learn More</a>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="feature-card">
+                        <i class="fas fa-calendar-alt feature-icon"></i>
+                        <h3 class="feature-title">Events Calendar</h3>
+                        <p class="feature-text">Stay informed about upcoming events, activities, and important dates.</p>
+                        <a href="register.php" class="btn btn-primary">Learn More</a>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="feature-card">
+                        <i class="fas fa-comments feature-icon"></i>
+                        <h3 class="feature-title">Community Forum</h3>
+                        <p class="feature-text">Connect with other residents, share ideas, and build a stronger community.</p>
+                        <a href="register.php" class="btn btn-primary">Learn More</a>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="feature-card">
+                        <i class="fas fa-bell feature-icon"></i>
+                        <h3 class="feature-title">Notifications</h3>
+                        <p class="feature-text">Receive instant notifications about important announcements and updates.</p>
+                        <a href="register.php" class="btn btn-primary">Learn More</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Dormitories Section -->
+    <section class="dormitories-section" id="dormitories">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title">Our Dormitories</h2>
+                <p class="section-subtitle">Choose from our range of modern dormitories designed for student comfort and convenience.</p>
+            </div>
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card dorm-card">
+                        <div class="position-relative">
+                            <img src="images/sbh-room.jpeg" class="card-img-top dorm-img" alt="Student Boarding House">
+                            <span class="dorm-badge">Most Popular</span>
+                        </div>
+                        <div class="card-body">
+                            <h3 class="dorm-title">Student Boarding House <span style="font-size: 0.8rem; color: #666;">(Sharing Room)</span></h3>
+                            <p class="dorm-text">Traditional dormitory with shared facilities, perfect for students looking for a community experience.</p>
+                            <div class="mb-3">
+                                <div class="dorm-feature"><i class="fas fa-wifi"></i> Free High-Speed WiFi</div>
+                                <div class="dorm-feature"><i class="fas fa-snowflake"></i> Air Conditioning</div>
+                                <div class="dorm-feature"><i class="fas fa-chair"></i> 1 Table and 1 Chair</div>
+                            </div>
+                            <div class="d-flex">
+                            <a href="sbh-details.php" class="btn btn-outline-primary mr-2 flex-grow-1">Details Dormitory</a>
+                            <a href="register.php?dorm=1" class="btn btn-primary flex-grow-1">Register Now</a>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-4">
+                    <div class="card dorm-card">
+                        <div class="position-relative">
+                            <img src="images/nbh-room.jpeg" class="card-img-top dorm-img" alt="New Beverly Hills">
+                            <!-- Removed "Premium" badge -->
+                        </div>
+                        <div class="card-body">
+                            <h3 class="dorm-title">New Beverly Hills <span style="font-size: 0.8rem; color: #666;">(Sharing Room/Single Room)</span></h3>
+                            <p class="dorm-text">Modern dormitory with private bathrooms, ideal for students seeking comfort and privacy.</p>
+                            <div class="mb-3">
+                                <div class="dorm-feature"><i class="fas fa-wifi"></i> Free High-Speed WiFi</div>
+                                <div class="dorm-feature"><i class="fas fa-bath"></i> Private Bathroom</div>
+                                <div class="dorm-feature"><i class="fas fa-snowflake"></i> Air Conditioning</div>
+                                <div class="dorm-feature"><i class="fas fa-chair"></i> 1 Table and 1 Chair</div>
+                            </div>
+                            <div class="d-flex">
+                            <a href="nbh-details.php" class="btn btn-outline-primary mr-2 flex-grow-1">Details Dormitory</a>
+                            <a href="register.php?dorm=2" class="btn btn-primary flex-grow-1">Register Now</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section class="testimonials-section" id="testimonials">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title">Student Reviews</h2>
+                <p class="section-subtitle">See what our residents have to say about their PresDorm experience.</p>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="testimonial-card">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" class="testimonial-img" alt="Student Review">
+                        <div class="testimonial-rating">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <h4 class="testimonial-name">Thoriq Zul Atsari</h4>
+                        <p class="testimonial-position">Computer Science Student</p>
+                        <p class="testimonial-text">"PresDorm has made my college experience so much better. The maintenance requests are handled quickly, and the community events help me meet new friends."</p>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="testimonial-card">
+                        <img src="https://randomuser.me/api/portraits/men/46.jpg" class="testimonial-img" alt="Student Review">
+                        <div class="testimonial-rating">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star-half-alt"></i>
+                        </div>
+                        <h4 class="testimonial-name">Reza Fahlevi</h4>
+                        <p class="testimonial-position">Computer Science Student</p>
+                        <p class="testimonial-text">"The New Beverly Hills dormitory is amazing! Having a private bathroom makes all the difference, and the security features make me feel safe."</p>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="testimonial-card">
+                        <img src="https://randomuser.me/api/portraits/women/65.jpg" class="testimonial-img" alt="Student Review">
+                        <div class="testimonial-rating">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="far fa-star"></i>
+                        </div>
+                        <h4 class="testimonial-name">Emily Chen</h4>
+                        <p class="testimonial-position">Engineering Student</p>
+                        <p class="testimonial-text">"I love how easy it is to pay rent and submit maintenance requests through the portal. The WiFi is fast and reliable, which is essential for my studies."</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="row justify-content-center text-center">
+                <div class="col-lg-8">
+                    <h2 class="cta-title">Ready to Join Our Dormitories?</h2>
+                    <p class="cta-text">Register now to secure your spot in one of our modern dormitories and experience the PresDorm difference.</p>
+                    <a href="register.php" class="btn cta-btn">Register Now</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4">
+                    <h3 class="footer-logo">PresDorm</h3>
+                    <p class="footer-text">A modern dormitory management system designed to enhance your campus living experience.</p>
+                    <div class="footer-social">
+                        <a href="#"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="https://www.instagram.com/sbhdormitory/"><i class="fab fa-instagram"></i></a>
+                        <a href="#"><i class="fab fa-linkedin-in"></i></a>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-6 mb-4">
+                    <h4 class="footer-title">Quick Links</h4>
+                    <a href="#features" class="footer-link">Features</a>
+                    <a href="#dormitories" class="footer-link">Dormitories</a>
+                    <a href="#testimonials" class="footer-link">Reviews</a>
+                    <a href="login.php" class="footer-link">Login</a>
+                    <a href="register.php" class="footer-link">Register</a>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-4">
+                    <h4 class="footer-title">Dormitories</h4>
+                    <a href="register.php?dorm=1" class="footer-link">Student Boarding House</a>
+                    <a href="register.php?dorm=2" class="footer-link">New Beverly Hills</a>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-4">
+                    <h4 class="footer-title">Contact</h4>
+                    <p class="footer-link"><i class="fas fa-map-marker-alt mr-2"></i> 123 University Drive, Campus Area</p>
+                    <p class="footer-link"><i class="fas fa-phone mr-2"></i> (123) 456-7890</p>
+                    <p class="footer-link"><i class="fas fa-envelope mr-2"></i> info@presdorm.com</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>© <?php echo $current_year; ?> PresDorm. All Rights Reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') return;
+                
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    const navbarHeight = document.querySelector('.navbar').offsetHeight;
+                    const targetPosition = targetElement.getBoundingClientRect().top + window.pageYOffset - navbarHeight;
+                    
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // Navbar scroll effect
+        window.addEventListener('scroll', function() {
+            const navbar = document.querySelector('.navbar');
+            if (window.scrollY > 50) {
+                navbar.style.padding = '0.5rem 2rem';
+                navbar.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)';
+            } else {
+                navbar.style.padding = '1rem 2rem';
+                navbar.style.boxShadow = '0 2px 15px rgba(0,0,0,0.08)';
+            }
+        });
+
+        // Counter animation for statistics
+        function animateCounters() {
+            const counters = document.querySelectorAll('.counter');
+            const speed = 200;
+
+            counters.forEach(counter => {
+                const updateCount = () => {
+                    const target = +counter.getAttribute('data-target');
+                    const count = +counter.innerText.replace(/,/g, '');
+                    const increment = target / speed;
+
+                    if (count < target) {
+                        counter.innerText = Math.ceil(count + increment);
+                        setTimeout(updateCount, 1);
+                    } else {
+                        counter.innerText = target.toLocaleString();
+                    }
+                };
+                updateCount();
+            });
+        }
+
+        // Initialize animations when elements come into view
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    if (entry.target.classList.contains('counter-wrapper')) {
+                        animateCounters();
+                    }
+                    entry.target.classList.add('animate');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.feature-card, .dorm-card, .testimonial-card, .counter-wrapper').forEach(element => {
+            observer.observe(element);
+        });
+    </script>
+</body>
+</html>

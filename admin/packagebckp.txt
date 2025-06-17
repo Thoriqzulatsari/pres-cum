@@ -1,0 +1,599 @@
+<?php
+require_once '../config.php';
+
+// Check if user is logged in and is admin
+if (!isLoggedIn() || !isAdmin()) {
+    redirect('../login.php');
+    exit;
+}
+
+// Removed duplicate table creation code that was at the end of the file
+
+// Handle package addition
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_package'])) {
+    $resident_id = (int)$_POST['resident_id'];
+    $tracking_number = sanitize($_POST['tracking_number']);
+    $courier = sanitize($_POST['courier']);
+    $description = sanitize($_POST['description']);
+    
+    // Validate inputs
+    $errors = [];
+    
+    if ($resident_id <= 0) {
+        $errors[] = "Please select a resident.";
+    }
+    
+    if (empty($tracking_number) && empty($description)) {
+        $errors[] = "Please provide either a tracking number or package description.";
+    }
+    
+    if (empty($courier)) {
+        $errors[] = "Courier information is required.";
+    }
+    
+    if (empty($errors)) {
+        $sql = "INSERT INTO packages (resident_id, tracking_number, courier, description, arrival_date, status, created_at) 
+                VALUES (?, ?, ?, ?, NOW(), 'pending', NOW())";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("isss", $resident_id, $tracking_number, $courier, $description);
+        
+        if ($stmt->execute()) {
+            $_SESSION['success_msg'] = "Package information added successfully!";
+            
+            // Get resident details for notification
+            $sql = "SELECT u.full_name, u.id as user_id, r.room_number, d.name as dormitory_name
+                    FROM users u
+                    JOIN resident_profiles rp ON u.id = rp.user_id
+                    JOIN rooms r ON rp.room_id = r.id
+                    JOIN dormitories d ON rp.dormitory_id = d.id
+                    WHERE u.id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("i", $resident_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows > 0) {
+                $resident = $result->fetch_assoc();
+                
+                // Create notification
+                $notification_title = "Package Arrived";
+                $notification_message = "You have a package from " . $courier;
+                if (!empty($tracking_number)) {
+                    $notification_message .= " (Tracking #: " . $tracking_number . ")";
+                }
+                $notification_message .= ". Please collect it from the front desk.";
+                
+                $sql = "INSERT INTO notifications (user_id, title, message, created_at, is_read) 
+                        VALUES (?, ?, ?, NOW(), 0)";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("iss", $resident_id, $notification_title, $notification_message);
+                $stmt->execute();
+            }
+            
+            redirect("packages.php");
+            exit;
+        } else {
+            $errors[] = "Failed to add package information: " . $conn->error;
+        }
+    }
+}
+
+// Handle package status update
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_status'])) {
+    $package_id = (int)$_POST['package_id'];
+    $status = sanitize($_POST['status']);
+    
+    // Validate inputs
+    if (!in_array($status, ['pending', 'delivered', 'returned'])) {
+        $_SESSION['error_msg'] = "Invalid status selected.";
+        redirect("packages.php");
+        exit;
+    }
+    
+    $sql = "UPDATE packages SET status = ?, updated_at = NOW() WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("si", $status, $package_id);
+    
+    if ($stmt->execute()) {
+        $_SESSION['success_msg'] = "Package status updated successfully!";
+        
+        // If delivered, add a notification
+        if ($status == 'delivered') {
+            $sql = "SELECT resident_id FROM packages WHERE id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("i", $package_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                $resident_id = $row['resident_id'];
+                
+                $notification_title = "Package Delivered";
+                $notification_message = "Your package has been delivered to you. Thank you!";
+                
+                $sql = "INSERT INTO notifications (user_id, title, message, created_at, is_read) 
+                        VALUES (?, ?, ?, NOW(), 0)";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("iss", $resident_id, $notification_title, $notification_message);
+                $stmt->execute();
+            }
+        }
+    } else {
+        $_SESSION['error_msg'] = "Failed to update package status: " . $conn->error;
+    }
+    
+    redirect("packages.php");
+    exit;
+}
+
+// Handle package deletion
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $package_id = (int)$_GET['delete'];
+    
+    $sql = "DELETE FROM packages WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $package_id);
+    
+    if ($stmt->execute()) {
+        $_SESSION['success_msg'] = "Package information deleted successfully!";
+    } else {
+        $_SESSION['error_msg'] = "Failed to delete package information: " . $conn->error;
+    }
+    
+    redirect("packages.php");
+    exit;
+}
+
+// Get residents for dropdown
+$sql = "SELECT u.id, u.full_name, r.room_number, d.name as dormitory_name
+        FROM users u
+        JOIN resident_profiles rp ON u.id = rp.user_id
+        JOIN rooms r ON rp.room_id = r.id
+        JOIN dormitories d ON rp.dormitory_id = d.id
+        WHERE u.user_type = 'resident'
+        ORDER BY d.name, r.room_number, u.full_name";
+$result = $conn->query($sql);
+$residents = [];
+
+if ($result->num_rows > 0) {
+    while($row = $result->fetch_assoc()) {
+        $residents[] = $row;
+    }
+}
+
+// Get dormitories for filter
+$sql = "SELECT id, name FROM dormitories ORDER BY name";
+$result = $conn->query($sql);
+$dormitories = [];
+if ($result->num_rows > 0) {
+    while($row = $result->fetch_assoc()) {
+        $dormitories[] = $row;
+    }
+}
+
+// Set up filtering
+$dorm_filter = isset($_GET['dorm']) ? (int)$_GET['dorm'] : 0;
+$status_filter = isset($_GET['status']) ? sanitize($_GET['status']) : '';
+$search = isset($_GET['search']) ? sanitize($_GET['search']) : '';
+
+// Skip the complex packages query initially to show just a message and the form
+$packages = [];
+
+// Basic check to see if the table exists and is accessible
+try {
+    $test_query = "SELECT 1 FROM packages LIMIT 1";
+    $conn->query($test_query);
+    
+    // If we got here, the table exists, so we can run the full query
+    $sql = "SELECT p.id, p.tracking_number, p.courier, p.description, p.arrival_date, p.status, p.created_at, 
+                   u.full_name as resident_name, r.room_number, d.name as dormitory_name, d.id as dormitory_id
+            FROM packages p
+            JOIN users u ON p.resident_id = u.id
+            JOIN resident_profiles rp ON u.id = rp.user_id
+            JOIN rooms r ON rp.room_id = r.id
+            JOIN dormitories d ON rp.dormitory_id = d.id
+            WHERE 1=1";
+
+    // Add filters
+    if ($dorm_filter > 0) {
+        $sql .= " AND d.id = " . $dorm_filter;
+    }
+    if (!empty($status_filter)) {
+        $sql .= " AND p.status = '" . $status_filter . "'";
+    }
+    if (!empty($search)) {
+        $sql .= " AND (p.tracking_number LIKE '%" . $search . "%' OR p.description LIKE '%" . $search . "%' OR u.full_name LIKE '%" . $search . "%')";
+    }
+
+    // Add sorting - newest packages first
+    $sql .= " ORDER BY p.created_at DESC";
+
+    $result = $conn->query($sql);
+    if ($result && $result->num_rows > 0) {
+        while($row = $result->fetch_assoc()) {
+            $packages[] = $row;
+        }
+    }
+} catch (Exception $e) {
+    // Table doesn't exist yet or other error
+    $_SESSION['error_msg'] = "Setting up package system. Please add your first package.";
+}
+
+// Create notifications table if it doesn't exist
+$sql = "CREATE TABLE IF NOT EXISTS notifications (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    user_id INT(11) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    KEY user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+$conn->query($sql);
+
+// Create packages table if it doesn't exist
+$sql = "CREATE TABLE IF NOT EXISTS packages (
+    id INT(11) NOT NULL AUTO_INCREMENT,
+    resident_id INT(11) NOT NULL,
+    tracking_number VARCHAR(100) NULL,
+    courier VARCHAR(100) NOT NULL,
+    description TEXT NULL,
+    arrival_date DATETIME NOT NULL,
+    status ENUM('pending', 'delivered', 'returned') NOT NULL DEFAULT 'pending',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NULL,
+    PRIMARY KEY (id),
+    KEY resident_id (resident_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+$conn->query($sql);
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Package Management - PresDorm Admin</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css">
+    <style>
+        .sidebar {
+            min-height: calc(100vh - 56px);
+            background-color: #343a40;
+            color: white;
+        }
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.75);
+        }
+        .sidebar .nav-link:hover {
+            color: rgba(255, 255, 255, 1);
+        }
+        .sidebar .nav-link.active {
+            color: #fff;
+            background-color: #007bff;
+        }
+        .package-card {
+            margin-bottom: 15px;
+            transition: transform 0.2s;
+        }
+        .package-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .package-row:hover {
+            background-color: #f8f9fa;
+        }
+        .status-badge-pending {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .status-badge-delivered {
+            background-color: #28a745;
+            color: white;
+        }
+        .status-badge-returned {
+            background-color: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="dashboard.php">PresDorm Admin</a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ml-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown">
+                            <?php echo $_SESSION['full_name']; ?>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" href="profile.php">Profile</a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="../logout.php">Logout</a>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2 sidebar">
+                <div class="pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="dashboard.php">
+                                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="residents.php">
+                                <i class="fas fa-users mr-2"></i>Residents
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="rooms.php">
+                                <i class="fas fa-door-open mr-2"></i>Rooms
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="issues.php">
+                                <i class="fas fa-tools mr-2"></i>Technical Issues
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="events.php">
+                                <i class="fas fa-calendar-alt mr-2"></i>Events
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="forum.php">
+                                <i class="fas fa-comments mr-2"></i>Forum
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="packages.php">
+                                <i class="fas fa-box mr-2"></i>Packages
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="col-md-10 p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Package Management</h2>
+                    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addPackageModal">
+                        <i class="fas fa-plus-circle mr-1"></i> Add New Package
+                    </button>
+                </div>
+                
+                <?php if (isset($_SESSION['success_msg'])): ?>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <?php echo $_SESSION['success_msg']; ?>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <?php unset($_SESSION['success_msg']); ?>
+                <?php endif; ?>
+                
+                <?php if (isset($_SESSION['error_msg'])): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <?php echo $_SESSION['error_msg']; ?>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <?php unset($_SESSION['error_msg']); ?>
+                <?php endif; ?>
+                
+                <?php if (isset($errors) && !empty($errors)): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <ul class="mb-0">
+                            <?php foreach ($errors as $error): ?>
+                                <li><?php echo $error; ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                <?php endif; ?>
+                
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Filter Packages</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" action="packages.php" class="form-inline">
+                            <div class="form-group mr-3 mb-2">
+                                <label class="mr-2">Dormitory:</label>
+                                <select name="dorm" class="form-control">
+                                    <option value="0">All Dormitories</option>
+                                    <?php foreach ($dormitories as $dorm): ?>
+                                        <option value="<?php echo $dorm['id']; ?>" <?php echo ($dorm_filter == $dorm['id']) ? 'selected' : ''; ?>>
+                                            <?php echo $dorm['name']; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group mr-3 mb-2">
+                                <label class="mr-2">Status:</label>
+                                <select name="status" class="form-control">
+                                    <option value="">All Statuses</option>
+                                    <option value="pending" <?php echo ($status_filter == 'pending') ? 'selected' : ''; ?>>Pending</option>
+                                    <option value="delivered" <?php echo ($status_filter == 'delivered') ? 'selected' : ''; ?>>Delivered</option>
+                                    <option value="returned" <?php echo ($status_filter == 'returned') ? 'selected' : ''; ?>>Returned</option>
+                                </select>
+                            </div>
+                            <div class="form-group mr-3 mb-2">
+                                <label class="mr-2">Search:</label>
+                                <input type="text" name="search" class="form-control" placeholder="Tracking #, description or name..." value="<?php echo $search; ?>">
+                            </div>
+                            <button type="submit" class="btn btn-primary mb-2">Apply Filters</button>
+                            <a href="packages.php" class="btn btn-secondary mb-2 ml-2">Clear Filters</a>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Package List</h5>
+                    </div>
+                    <div class="card-body">
+                        <?php if (count($packages) > 0): ?>
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Resident</th>
+                                            <th>Room</th>
+                                            <th>Courier</th>
+                                            <th>Tracking/Description</th>
+                                            <th>Arrival Date</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($packages as $package): ?>
+                                            <tr class="package-row">
+                                                <td><?php echo htmlspecialchars($package['resident_name']); ?></td>
+                                                <td><?php echo $package['dormitory_name'] . ' ' . $package['room_number']; ?></td>
+                                                <td><?php echo htmlspecialchars($package['courier']); ?></td>
+                                                <td>
+                                                    <?php if (!empty($package['tracking_number'])): ?>
+                                                        <strong>Tracking:</strong> <?php echo htmlspecialchars($package['tracking_number']); ?><br>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($package['description'])): ?>
+                                                        <small><?php echo htmlspecialchars($package['description']); ?></small>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td><?php echo date('M d, Y H:i', strtotime($package['arrival_date'])); ?></td>
+                                                <td>
+                                                    <span class="badge status-badge-<?php echo $package['status']; ?>">
+                                                        <?php echo ucfirst($package['status']); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div class="dropdown">
+                                                        <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                            Actions
+                                                        </button>
+                                                        <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                                                            <?php if ($package['status'] == 'pending'): ?>
+                                                                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+                                                                    <input type="hidden" name="package_id" value="<?php echo $package['id']; ?>">
+                                                                    <input type="hidden" name="status" value="delivered">
+                                                                    <button type="submit" name="update_status" class="dropdown-item text-success">
+                                                                        <i class="fas fa-check mr-1"></i> Mark as Delivered
+                                                                    </button>
+                                                                </form>
+                                                                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+                                                                    <input type="hidden" name="package_id" value="<?php echo $package['id']; ?>">
+                                                                    <input type="hidden" name="status" value="returned">
+                                                                    <button type="submit" name="update_status" class="dropdown-item text-danger">
+                                                                        <i class="fas fa-undo mr-1"></i> Mark as Returned
+                                                                    </button>
+                                                                </form>
+                                                            <?php elseif ($package['status'] == 'delivered'): ?>
+                                                                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+                                                                    <input type="hidden" name="package_id" value="<?php echo $package['id']; ?>">
+                                                                    <input type="hidden" name="status" value="pending">
+                                                                    <button type="submit" name="update_status" class="dropdown-item text-warning">
+                                                                        <i class="fas fa-undo mr-1"></i> Mark as Pending
+                                                                    </button>
+                                                                </form>
+                                                            <?php elseif ($package['status'] == 'returned'): ?>
+                                                                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+                                                                    <input type="hidden" name="package_id" value="<?php echo $package['id']; ?>">
+                                                                    <input type="hidden" name="status" value="pending">
+                                                                    <button type="submit" name="update_status" class="dropdown-item text-warning">
+                                                                        <i class="fas fa-undo mr-1"></i> Mark as Pending
+                                                                    </button>
+                                                                </form>
+                                                            <?php endif; ?>
+                                                            <div class="dropdown-divider"></div>
+                                                            <a href="?delete=<?php echo $package['id']; ?>" class="dropdown-item text-danger" 
+                                                               onclick="return confirm('Are you sure you want to delete this package information?')">
+                                                                <i class="fas fa-trash mr-1"></i> Delete
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <p class="text-muted">No packages found matching your filters.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Package Modal -->
+    <div class="modal fade" id="addPackageModal" tabindex="-1" role="dialog" aria-labelledby="addPackageModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="addPackageModalLabel">Add New Package</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="resident_id">Resident</label>
+                            <select class="form-control" id="resident_id" name="resident_id" required>
+                                <option value="">-- Select Resident --</option>
+                                <?php foreach ($residents as $resident): ?>
+                                    <option value="<?php echo $resident['id']; ?>">
+                                        <?php echo htmlspecialchars($resident['full_name']) . ' - ' . $resident['dormitory_name'] . ' ' . $resident['room_number']; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="courier">Courier/Sender</label>
+                            <input type="text" class="form-control" id="courier" name="courier" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="tracking_number">Tracking Number (Optional)</label>
+                            <input type="text" class="form-control" id="tracking_number" name="tracking_number">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="description">Package Description (Optional)</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                            <small class="form-text text-muted">Size, type or any distinguishing characteristics of the package.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" name="add_package" class="btn btn-primary">Add Package & Notify Resident</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
